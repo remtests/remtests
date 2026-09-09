@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canvas Collaboratif</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #222;
+      font-family: arial, Sans-Serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: crosshair;
+    }
+
+    p1 {
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="board"></canvas>
+
+  <script type="module">
+    // --- Firebase ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+    import { getDatabase, ref, push, onChildAdded } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAvQdwzqfgsdJU5RzvLjHv-VXhJEXx_CeQ",
+      authDomain: "online-canevas.firebaseapp.com",
+      databaseURL: "https://online-canevas-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "online-canevas",
+      storageBucket: "online-canevas.appspot.com",   // ← CORRIGÉ
+      messagingSenderId: "705362791361",
+      appId: "1:705362791361:web:87b98460d33f0c9c6d7d40",
+      measurementId: "G-JEWKB1H5L3"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Référence principale
+    const strokesRef = ref(db, "strokes");
+
+    // Heure d'arrivée du joueur
+    const joinTime = Date.now();
+
+    // --- Canvas ---
+    const canvas = document.getElementById("board");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let drawing = false;
+    let lastX = null;
+    let lastY = null;
+
+    // --- Dessin local ---
+    canvas.addEventListener("mousedown", (e) => {
+      drawing = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+
+    canvas.addEventListener("mouseup", () => {
+      drawing = false;
+      lastX = null;
+      lastY = null;
+    });
+
+    canvas.addEventListener("mousemove", draw);
+
+    function draw(e) {
+      if (!drawing) return;
+
+      const x = e.clientX;
+      const y = e.clientY;
+
+      // Envoi du segment à Firebase
+      push(strokesRef, {
+        x1: lastX,
+        y1: lastY,
+        x2: x,
+        y2: y,
+        t: Date.now() // timestamp
+      });
+
+      // Dessin local immédiat
+      drawLine(lastX, lastY, x, y);
+
+      lastX = x;
+      lastY = y;
+    }
+
+    function drawLine(x1, y1, x2, y2) {
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    // --- Réception des traits des autres utilisateurs ---
+    onChildAdded(strokesRef, (snapshot) => {
+      const { x1, y1, x2, y2, t } = snapshot.val();
+
+      // N'affiche que ce qui a été dessiné APRÈS l'arrivée du joueur
+      if (t >= joinTime) {
+        drawLine(x1, y1, x2, y2);
+      }
+    });
+  </script>
+
+</body>
+</html>
